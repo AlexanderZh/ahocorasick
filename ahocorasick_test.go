@@ -1,6 +1,7 @@
 package ahocorasick
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -64,6 +65,9 @@ func TestFindAllByteSlice(t *testing.T) {
 	}
 	for _, test := range tests {
 		matcher := compile(test.patterns)
+		b := matcher.Serialize()
+		e := matcher.Deserialize(b)
+		fmt.Print(e)
 		got := matcher.findAll(test.text)
 		gotConverted := convert(got)
 		if !(len(got) == 0 && len(test.expected) == 0) &&

@@ -4,6 +4,7 @@ package ahocorasick
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"sort"
 )
@@ -22,6 +23,170 @@ type Matcher struct {
 	check  []int   // check array in the double array trie
 	fail   []int   // fail function
 	output [][]int // output function
+}
+
+// added function for byte serialization of compiled matcher
+func (m *Matcher) Serialize() []byte {
+	var lenBase, lenCheck, lenFail, lenOutput uint64
+
+	lenBase = uint64(len(m.base))
+	lenCheck = uint64(len(m.check))
+	lenFail = uint64(len(m.fail))
+	lenOutput = uint64(len(m.output))
+
+	lenOutputEach := make([]uint64, lenOutput)
+
+	for i, v := range m.output {
+		lenOutputEach[i] = uint64(len(v))
+	}
+
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, lenBase)
+	if err != nil {
+		fmt.Println("binary.Write failed for lenBase:", err)
+	}
+	err = binary.Write(buf, binary.LittleEndian, lenCheck)
+	if err != nil {
+		fmt.Println("binary.Write failed for lenCheck:", err)
+	}
+	err = binary.Write(buf, binary.LittleEndian, lenFail)
+	if err != nil {
+		fmt.Println("binary.Write failed for lenFail:", err)
+	}
+	err = binary.Write(buf, binary.LittleEndian, lenOutput) //2d array
+	if err != nil {
+		fmt.Println("binary.Write failed lenOutput:", err)
+	}
+
+	for i, v := range lenOutputEach {
+		err = binary.Write(buf, binary.LittleEndian, uint64(v))
+		if err != nil {
+			fmt.Printf("binary.Write failed for lenOutputEach: %s at position %d", err, i)
+		}
+	}
+
+	for i, v := range m.base {
+		err = binary.Write(buf, binary.LittleEndian, uint64(v))
+		if err != nil {
+			fmt.Printf("binary.Write failed: %s at base, position %d", err, i)
+		}
+	}
+	for i, v := range m.check {
+		err = binary.Write(buf, binary.LittleEndian, uint64(v))
+		if err != nil {
+			fmt.Printf("binary.Write failed: %s at check, position %d", err, i)
+		}
+	}
+	for i, v := range m.fail {
+		err = binary.Write(buf, binary.LittleEndian, uint64(v))
+		if err != nil {
+			fmt.Printf("binary.Write failed: %s at fail, position %d", err, i)
+		}
+	}
+	for i, v := range m.output {
+		for j, u := range v {
+			err = binary.Write(buf, binary.LittleEndian, uint64(u))
+			if err != nil {
+				fmt.Printf("binary.Write failed: %s at output, position %d, %d", err, i, j)
+			}
+		}
+	}
+	fmt.Printf("% x", buf.Bytes())
+	return (buf.Bytes())
+}
+
+type DeserializeError struct{}
+
+func (m *DeserializeError) Error() string {
+	return "Finite automata is corrupted"
+}
+
+func (m *Matcher) Deserialize(data []byte) error {
+
+	var err error
+
+	totalLength := len(data)
+
+	if totalLength < 32 || totalLength%8 != 0 {
+		return &DeserializeError{}
+	}
+	//reader := bytes.NewReader(data)
+	reader := bytes.NewReader(data)
+
+	var lenBase, lenCheck, lenFail, lenOutput uint64
+
+	err = binary.Read(reader, binary.LittleEndian, &lenBase)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.LittleEndian, &lenCheck)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.LittleEndian, &lenFail)
+	if err != nil {
+		return err
+	}
+	err = binary.Read(reader, binary.LittleEndian, &lenOutput)
+	if err != nil {
+		return err
+	}
+
+	lenOutputEach := make([]uint64, lenOutput)
+
+	if totalLength < 8*(4+int(lenOutput)) {
+		return &DeserializeError{}
+	}
+
+	calculatedLength := 8 * (4 + int(lenOutput) + int(lenBase) + int(lenCheck) + int(lenFail))
+
+	for i := 0; i < int(lenOutput); i++ {
+		err = binary.Read(reader, binary.LittleEndian, &(lenOutputEach[i]))
+		if err != nil {
+			return err
+		}
+		calculatedLength += 8 * int(lenOutputEach[i])
+	}
+
+	if calculatedLength != totalLength {
+		return &DeserializeError{}
+	}
+
+	err = readToSlice(reader, lenBase, &m.base)
+	if err != nil {
+		return err
+	}
+	err = readToSlice(reader, lenCheck, &m.check)
+	if err != nil {
+		return err
+	}
+	err = readToSlice(reader, lenFail, &m.fail)
+	if err != nil {
+		return err
+	}
+	m.output = make([][]int, lenOutput)
+
+	for i, v := range lenOutputEach {
+		err = readToSlice(reader, v, &m.output[i])
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func readToSlice(reader *bytes.Reader, len uint64, array *[]int) error {
+	*array = make([]int, len)
+	var item uint64
+	for i := 0; i < int(len); i++ {
+		err := binary.Read(reader, binary.LittleEndian, &item)
+		if err != nil {
+			return err
+		}
+		(*array)[i] = int(item)
+	}
+	return nil
 }
 
 func (m *Matcher) String() string {

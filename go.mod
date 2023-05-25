@@ -1,3 +1,3 @@
-module github.com/rrethy/ahocorasick
+module github.com/AlexanderZh/ahocorasick
 
 go 1.19

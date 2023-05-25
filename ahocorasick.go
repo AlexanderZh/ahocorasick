@@ -531,6 +531,12 @@ type Match struct {
 	//Key int // key of patterm
 }
 
+type MatchKey struct {
+	//Word  []byte // the matched pattern
+	Index int // the start index of the match
+	Key   int // key of patterm
+}
+
 func (m *Matcher) findAll(text []byte) []*Match {
 	var matches []*Match
 	state := 0
@@ -550,9 +556,36 @@ func (m *Matcher) findAll(text []byte) []*Match {
 	return matches
 }
 
+func (m *Matcher) findAllReader(reader *bytes.Reader) []*MatchKey {
+	var matches []*MatchKey
+	state := 0
+	b, err := reader.ReadByte()
+	i := 1
+	for err == nil {
+		offset := int(b)
+		for state != 0 && !m.hasEdge(state, offset) {
+			state = m.fail[state]
+		}
+
+		if m.hasEdge(state, offset) {
+			state = m.base[state] + offset
+		}
+		for _, item := range m.output[state] {
+			matches = append(matches, &MatchKey{i, int(item.Key)})
+		}
+		b, err = reader.ReadByte()
+		i++
+	}
+	return matches
+}
+
 // FindAllByteSlice finds all instances of the patterns in the text.
 func (m *Matcher) FindAllByteSlice(text []byte) (matches []*Match) {
 	return m.findAll(text)
+}
+
+func (m *Matcher) FindAllByteReader(reader *bytes.Reader) (matches []*MatchKey) {
+	return m.findAllReader(reader)
 }
 
 // FindAllString finds all instances of the patterns in the text.

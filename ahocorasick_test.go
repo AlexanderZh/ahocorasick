@@ -1,6 +1,7 @@
 package ahocorasick
 
 import (
+	"bytes"
 	"math/rand"
 	"reflect"
 	"testing"
@@ -231,6 +232,28 @@ func TestRandomGen100kNotFound(t *testing.T) {
 	}
 }
 
+func TestRandomGen100kNotFoundReader(t *testing.T) {
+	N := 100000
+	L := 128
+	M := 1000000
+
+	words := make([][]byte, N)
+	buffer := make([]byte, M)
+	rand.Read(buffer)
+
+	for i := 0; i < N; i++ {
+		words[i] = make([]byte, L)
+		rand.Read(words[i])
+	}
+
+	m := CompileByteSlices(words)
+	data := bytes.NewReader(buffer)
+	Ms := m.FindAllByteReader(data)
+	if len(Ms) != 0 {
+		t.Errorf("Got %d matches", len(Ms))
+	}
+}
+
 func TestRandomGen100k1Found(t *testing.T) {
 	N := 100000
 	L := 128
@@ -250,6 +273,30 @@ func TestRandomGen100k1Found(t *testing.T) {
 	idx := rand.Intn(N - 1)
 	buffer2 := append(buffer, words[idx]...)
 	Ms := m.FindAllByteSlice(buffer2)
+	if len(Ms) != 1 {
+		t.Errorf("Got %d matches instead of 1", len(Ms))
+	}
+}
+
+func TestRandomGen100k1FoundReader(t *testing.T) {
+	N := 100000
+	L := 128
+	M := 1000000
+
+	words := make([][]byte, N)
+	buffer := make([]byte, M)
+	rand.Read(buffer)
+
+	for i := 0; i < N; i++ {
+		words[i] = make([]byte, L)
+		rand.Read(words[i])
+	}
+
+	m := CompileByteSlices(words)
+
+	idx := rand.Intn(N - 1)
+	buffer2 := append(buffer, words[idx]...)
+	Ms := m.FindAllByteReader(bytes.NewReader(buffer2))
 	if len(Ms) != 1 {
 		t.Errorf("Got %d matches instead of 1", len(Ms))
 	}
@@ -275,6 +322,31 @@ func TestRandomGen100kAllFound(t *testing.T) {
 		}
 	}
 	Ms := m.FindAllByteSlice(buffer2)
+	if len(Ms) != N {
+		t.Errorf("Got %d matches instead of %d", len(Ms), N)
+	}
+}
+
+func TestRandomGen100kAllFoundReader(t *testing.T) {
+	N := 100000
+	L := 128
+
+	words := make([][]byte, N)
+
+	for i := 0; i < N; i++ {
+		words[i] = make([]byte, L)
+		rand.Read(words[i])
+	}
+
+	m := CompileByteSlices(words)
+
+	buffer2 := make([]byte, N*L)
+	for i, w := range words {
+		for j := 0; j < L; j++ {
+			buffer2[i*L+j] = w[j]
+		}
+	}
+	Ms := m.FindAllByteReader(bytes.NewReader(buffer2))
 	if len(Ms) != N {
 		t.Errorf("Got %d matches instead of %d", len(Ms), N)
 	}

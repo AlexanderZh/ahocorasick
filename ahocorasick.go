@@ -17,12 +17,17 @@ const (
 	leaf = -1867
 )
 
+type SWord struct {
+	Len uint64
+	Key uint64
+}
+
 // Matcher is the pattern matching state machine.
 type Matcher struct {
-	base   []int   // base array in the double array trie
-	check  []int   // check array in the double array trie
-	fail   []int   // fail function
-	output [][]int // output function
+	base   []int     // base array in the double array trie
+	check  []int     // check array in the double array trie
+	fail   []int     // fail function
+	output [][]SWord // output function: originally [state][wordlen], replaced to tuple of {wordlen,workey}
 }
 
 // added function for byte serialization of compiled matcher
@@ -85,13 +90,12 @@ func (m *Matcher) Serialize() []byte {
 	}
 	for i, v := range m.output {
 		for j, u := range v {
-			err = binary.Write(buf, binary.LittleEndian, uint64(u))
+			err = binary.Write(buf, binary.LittleEndian, u)
 			if err != nil {
 				fmt.Printf("binary.Write failed: %s at output, position %d, %d", err, i, j)
 			}
 		}
 	}
-	fmt.Printf("% x", buf.Bytes())
 	return (buf.Bytes())
 }
 
@@ -145,7 +149,7 @@ func (m *Matcher) Deserialize(data []byte) error {
 		if err != nil {
 			return err
 		}
-		calculatedLength += 8 * int(lenOutputEach[i])
+		calculatedLength += 16 * int(lenOutputEach[i])
 	}
 
 	if calculatedLength != totalLength {
@@ -164,10 +168,9 @@ func (m *Matcher) Deserialize(data []byte) error {
 	if err != nil {
 		return err
 	}
-	m.output = make([][]int, lenOutput)
-
+	m.output = make([][]SWord, lenOutput)
 	for i, v := range lenOutputEach {
-		err = readToSlice(reader, v, &m.output[i])
+		err = readToSliceSWord(reader, v, &m.output[i])
 		if err != nil {
 			return err
 		}
@@ -185,6 +188,25 @@ func readToSlice(reader *bytes.Reader, len uint64, array *[]int) error {
 			return err
 		}
 		(*array)[i] = int(item)
+	}
+	return nil
+}
+
+func readToSliceSWord(reader *bytes.Reader, len uint64, array *[]SWord) error {
+	*array = make([]SWord, len)
+	var item uint64
+	var err error
+	for i := 0; i < int(len); i++ {
+		err = binary.Read(reader, binary.LittleEndian, &item)
+		if err != nil {
+			return err
+		}
+		(*array)[i].Len = item
+		err = binary.Read(reader, binary.LittleEndian, &item)
+		if err != nil {
+			return err
+		}
+		(*array)[i].Key = item
 	}
 	return nil
 }
@@ -209,7 +231,7 @@ func compile(words [][]byte) *Matcher {
 	m.base = make([]int, 2048)[:1]
 	m.check = make([]int, 2048)[:1]
 	m.fail = make([]int, 2048)[:1]
-	m.output = make([][]int, 2048)[:1]
+	m.output = make([][]SWord, 2048)[:1]
 
 	sort.Sort(byteSliceSlice(words))
 
@@ -261,7 +283,7 @@ func compile(words [][]byte) *Matcher {
 			newnode := trienode{newState, node.depth + 1, i, i}
 			for {
 				if newnode.depth >= len(words[i]) {
-					m.output[newState] = append(m.output[newState], len(words[i]))
+					m.output[newState] = append(m.output[newState], SWord{uint64(len(words[i])), uint64(i)})
 					newnode.start++
 				}
 				newnode.end++
@@ -347,7 +369,7 @@ func (m *Matcher) setFailState(state, parentState, offset int) {
 // This allows us to match substrings, commenting out this body would match
 // every word that is not a substring.
 func (m *Matcher) unionFailOutput(state, failState int) {
-	m.output[state] = append([]int{}, m.output[failState]...)
+	m.output[state] = append([]SWord{}, m.output[failState]...)
 }
 
 // findBase finds a base value which has free states in the positions that
@@ -439,7 +461,7 @@ func (m *Matcher) increaseSize(dsize int) {
 	m.base = append(m.base, make([]int, dsize)...)
 	m.check = append(m.check, make([]int, dsize)...)
 	m.fail = append(m.fail, make([]int, dsize)...)
-	m.output = append(m.output, make([][]int, dsize)...)
+	m.output = append(m.output, make([][]SWord, dsize)...)
 
 	lastFreeState := m.lastFreeState()
 	firstFreeState := m.firstFreeState()
@@ -506,6 +528,7 @@ func (m *Matcher) hasEdge(fromState, offset int) bool {
 type Match struct {
 	Word  []byte // the matched pattern
 	Index int    // the start index of the match
+	//Key int // key of patterm
 }
 
 func (m *Matcher) findAll(text []byte) []*Match {
@@ -520,8 +543,8 @@ func (m *Matcher) findAll(text []byte) []*Match {
 		if m.hasEdge(state, offset) {
 			state = m.base[state] + offset
 		}
-		for _, wordlen := range m.output[state] {
-			matches = append(matches, &Match{text[i-wordlen+1 : i+1], i - wordlen + 1})
+		for _, item := range m.output[state] {
+			matches = append(matches, &Match{text[i-int(item.Len)+1 : i+1], i - int(item.Len) + 1})
 		}
 	}
 	return matches

@@ -1,7 +1,7 @@
 package ahocorasick
 
 import (
-	"fmt"
+	"math/rand"
 	"reflect"
 	"testing"
 )
@@ -65,9 +65,14 @@ func TestFindAllByteSlice(t *testing.T) {
 	}
 	for _, test := range tests {
 		matcher := compile(test.patterns)
-		b := matcher.Serialize()
-		e := matcher.Deserialize(b)
-		fmt.Print(e)
+		for i := 0; i < 1000; i++ { //check memory leak
+			b := matcher.Serialize()
+			e := matcher.Deserialize(b)
+			if e != nil {
+				t.Errorf("error serializer")
+			}
+		}
+
 		got := matcher.findAll(test.text)
 		gotConverted := convert(got)
 		if !(len(got) == 0 && len(test.expected) == 0) &&
@@ -86,7 +91,7 @@ func TestIncreaseSize(t *testing.T) {
 		[]int{5, 0, 0},
 		[]int{0, 0, 0},
 		[]int{0, 0, 0},
-		[][]int{},
+		[][]SWord{},
 	}
 	m.increaseSize(1)
 	if !reflect.DeepEqual(m.base, []int{5, 0, 0, -3}) {
@@ -116,7 +121,7 @@ func TestIncreaseSize(t *testing.T) {
 		[]int{5, 0, 0},
 		[]int{0, 0, 0},
 		[]int{0, 0, 0},
-		[][]int{},
+		[][]SWord{},
 	}
 	m.increaseSize(3)
 	if !reflect.DeepEqual(m.base, []int{5, 0, 0, -5, -3, -4}) {
@@ -138,7 +143,7 @@ func TestIncreaseSize(t *testing.T) {
 		[]int{0},
 		[]int{0},
 		[]int{0},
-		[][]int{},
+		[][]SWord{},
 	}
 	m.increaseSize(5)
 	if !reflect.DeepEqual(m.base, []int{0, -5, -1, -2, -3, -4}) {
@@ -152,7 +157,7 @@ func TestIncreaseSize(t *testing.T) {
 		[]int{-103, -1867},
 		[]int{0, 0},
 		[]int{},
-		[][]int{},
+		[][]SWord{},
 	}
 	m.increaseSize(5)
 	if !reflect.DeepEqual(m.base, []int{-103, -1867, -6, -2, -3, -4, -5}) {
@@ -168,7 +173,7 @@ func TestNextFreeState(t *testing.T) {
 		[]int{5, 0, 0, -3},
 		[]int{-3, 0, 0, -1},
 		[]int{},
-		[][]int{},
+		[][]SWord{},
 	}
 	nextState := m.nextFreeState(3)
 	if nextState != -1 {
@@ -187,7 +192,7 @@ func TestOccupyState(t *testing.T) {
 		[]int{5, 0, 0, -3},
 		[]int{-3, 0, 0, -1},
 		[]int{},
-		[][]int{},
+		[][]SWord{},
 	}
 	m.increaseSize(5)
 	m.occupyState(3, 1)
@@ -201,5 +206,76 @@ func TestOccupyState(t *testing.T) {
 	}
 	if !reflect.DeepEqual(m.check, []int{0, 0, 0, 1, 1, 1, 1, 1, 1}) {
 		t.Errorf("Got: %v\n", m.check)
+	}
+}
+
+func TestRandomGen100kNotFound(t *testing.T) {
+	N := 100000
+	L := 128
+	M := 1000000
+
+	words := make([][]byte, N)
+	buffer := make([]byte, M)
+	rand.Read(buffer)
+
+	for i := 0; i < N; i++ {
+		words[i] = make([]byte, L)
+		rand.Read(words[i])
+	}
+
+	m := CompileByteSlices(words)
+
+	Ms := m.FindAllByteSlice(buffer)
+	if len(Ms) != 0 {
+		t.Errorf("Got %d matches", len(Ms))
+	}
+}
+
+func TestRandomGen100k1Found(t *testing.T) {
+	N := 100000
+	L := 128
+	M := 1000000
+
+	words := make([][]byte, N)
+	buffer := make([]byte, M)
+	rand.Read(buffer)
+
+	for i := 0; i < N; i++ {
+		words[i] = make([]byte, L)
+		rand.Read(words[i])
+	}
+
+	m := CompileByteSlices(words)
+
+	idx := rand.Intn(N - 1)
+	buffer2 := append(buffer, words[idx]...)
+	Ms := m.FindAllByteSlice(buffer2)
+	if len(Ms) != 1 {
+		t.Errorf("Got %d matches instead of 1", len(Ms))
+	}
+}
+
+func TestRandomGen100kAllFound(t *testing.T) {
+	N := 100000
+	L := 128
+
+	words := make([][]byte, N)
+
+	for i := 0; i < N; i++ {
+		words[i] = make([]byte, L)
+		rand.Read(words[i])
+	}
+
+	m := CompileByteSlices(words)
+
+	buffer2 := make([]byte, N*L)
+	for i, w := range words {
+		for j := 0; j < L; j++ {
+			buffer2[i*L+j] = w[j]
+		}
+	}
+	Ms := m.FindAllByteSlice(buffer2)
+	if len(Ms) != N {
+		t.Errorf("Got %d matches instead of %d", len(Ms), N)
 	}
 }

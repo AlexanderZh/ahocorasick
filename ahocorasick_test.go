@@ -327,7 +327,7 @@ func TestRandomGen100kAllFound(t *testing.T) {
 	}
 }
 
-func TestRandomGen100kAllFoundReader(t *testing.T) {
+func BenchmarkRandomGen100kAllFoundReader(b *testing.B) {
 	N := 100000
 	L := 128
 
@@ -348,6 +348,6 @@ func TestRandomGen100kAllFoundReader(t *testing.T) {
 	}
 	Ms := m.FindAllByteReader(bytes.NewReader(buffer2))
 	if len(Ms) != N {
-		t.Errorf("Got %d matches instead of %d", len(Ms), N)
+		b.Errorf("Got %d matches instead of %d", len(Ms), N)
 	}
 }

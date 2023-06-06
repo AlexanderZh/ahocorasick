@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sort"
 )
 
@@ -530,7 +531,7 @@ type Match struct {
 	Index int    // the start index of the match
 }
 
-type Matches interface{
+type Matches interface {
 	Append(key int, position int)
 	Count() int
 }
@@ -554,12 +555,14 @@ func (m *Matcher) findAll(text []byte) []*Match {
 	return matches
 }
 
-func (m *Matcher) findAllReader(reader *bytes.Reader,  matches Matches) {
+func (m *Matcher) findAllReader(reader io.Reader, matches Matches) {
 	state := 0
-	b, err := reader.ReadByte()
+	buf := make([]byte, 1)
+	n, err := reader.Read(buf)
+	b := int(buf[0])
 	i := 1
-	for err == nil {
-		offset := int(b)
+	for err == nil && n == 1 {
+		offset := b
 		for state != 0 && !m.hasEdge(state, offset) {
 			state = m.fail[state]
 		}
@@ -570,9 +573,10 @@ func (m *Matcher) findAllReader(reader *bytes.Reader,  matches Matches) {
 		for _, item := range m.output[state] {
 			matches.Append(i, int(item.Key))
 		}
-		b, err = reader.ReadByte()
+		n, err = reader.Read(buf)
+		b = int(buf[0])
 		i++
-	}	
+	}
 }
 
 // FindAllByteSlice finds all instances of the patterns in the text.
@@ -580,7 +584,7 @@ func (m *Matcher) FindAllByteSlice(text []byte) (matches []*Match) {
 	return m.findAll(text)
 }
 
-func (m *Matcher) FindAllByteReader(reader *bytes.Reader, matches Matches) {
+func (m *Matcher) FindAllByteReader(reader io.Reader, matches Matches) {
 	m.findAllReader(reader, matches)
 }
 

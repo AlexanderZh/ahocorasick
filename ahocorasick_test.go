@@ -2,7 +2,7 @@ package ahocorasick
 
 import (
 	"bytes"
-	"math/rand"
+	"crypto/rand"
 	"reflect"
 	"testing"
 )
@@ -232,6 +232,24 @@ func TestRandomGen100kNotFound(t *testing.T) {
 	}
 }
 
+// example of match interface redefining
+type MatchKey struct {
+	Index int // the start index of the match
+	Key   int // key of pattern
+}
+
+type MatchesKeys struct {
+	matches []MatchKey
+}
+
+func (m *MatchesKeys) Append(pos int, key int) {
+	m.matches = append(m.matches, MatchKey{pos, key})
+}
+
+func (m *MatchesKeys) Count() int {
+	return len(m.matches)
+}
+
 func TestRandomGen100kNotFoundReader(t *testing.T) {
 	N := 100000
 	L := 128
@@ -248,9 +266,11 @@ func TestRandomGen100kNotFoundReader(t *testing.T) {
 
 	m := CompileByteSlices(words)
 	data := bytes.NewReader(buffer)
-	Ms := m.FindAllByteReader(data)
-	if len(Ms) != 0 {
-		t.Errorf("Got %d matches", len(Ms))
+	var Ms Matches
+	Ms = &MatchesKeys{}
+	m.FindAllByteReader(data, Ms)
+	if  Ms.Count()!= 0 {
+		t.Errorf("Got %d matches", Ms.Count())
 	}
 }
 
@@ -296,9 +316,11 @@ func TestRandomGen100k1FoundReader(t *testing.T) {
 
 	idx := rand.Intn(N - 1)
 	buffer2 := append(buffer, words[idx]...)
-	Ms := m.FindAllByteReader(bytes.NewReader(buffer2))
-	if len(Ms) != 1 {
-		t.Errorf("Got %d matches instead of 1", len(Ms))
+	var Ms Matches
+	Ms = &MatchesKeys{}
+	m.FindAllByteReader(bytes.NewReader(buffer2),Ms)
+	if Ms.Count() != 1 {
+		t.Errorf("Got %d matches instead of 1", Ms.Count())
 	}
 }
 
@@ -346,8 +368,10 @@ func BenchmarkRandomGen100kAllFoundReader(b *testing.B) {
 			buffer2[i*L+j] = w[j]
 		}
 	}
-	Ms := m.FindAllByteReader(bytes.NewReader(buffer2))
-	if len(Ms) != N {
-		b.Errorf("Got %d matches instead of %d", len(Ms), N)
+	var Ms Matches
+	Ms = &MatchesKeys{}
+	m.FindAllByteReader(bytes.NewReader(buffer2),Ms)
+	if Ms.Count() != 1 {
+		b.Errorf("Got %d matches instead of 1", Ms.Count())
 	}
 }

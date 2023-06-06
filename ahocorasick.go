@@ -102,7 +102,7 @@ func (m *Matcher) Serialize() []byte {
 type DeserializeError struct{}
 
 func (m *DeserializeError) Error() string {
-	return "Finite automata is corrupted"
+	return "Finite state machine is corrupted"
 }
 
 func (m *Matcher) Deserialize(data []byte) error {
@@ -528,13 +528,11 @@ func (m *Matcher) hasEdge(fromState, offset int) bool {
 type Match struct {
 	Word  []byte // the matched pattern
 	Index int    // the start index of the match
-	//Key int // key of patterm
 }
 
-type MatchKey struct {
-	//Word  []byte // the matched pattern
-	Index int // the start index of the match
-	Key   int // key of patterm
+type Matches interface{
+	Append(key int, position int)
+	Count() int
 }
 
 func (m *Matcher) findAll(text []byte) []*Match {
@@ -556,8 +554,7 @@ func (m *Matcher) findAll(text []byte) []*Match {
 	return matches
 }
 
-func (m *Matcher) findAllReader(reader *bytes.Reader) []*MatchKey {
-	var matches []*MatchKey
+func (m *Matcher) findAllReader(reader *bytes.Reader,  matches Matches) {
 	state := 0
 	b, err := reader.ReadByte()
 	i := 1
@@ -571,12 +568,11 @@ func (m *Matcher) findAllReader(reader *bytes.Reader) []*MatchKey {
 			state = m.base[state] + offset
 		}
 		for _, item := range m.output[state] {
-			matches = append(matches, &MatchKey{i, int(item.Key)})
+			matches.Append(i, int(item.Key))
 		}
 		b, err = reader.ReadByte()
 		i++
-	}
-	return matches
+	}	
 }
 
 // FindAllByteSlice finds all instances of the patterns in the text.
@@ -584,8 +580,8 @@ func (m *Matcher) FindAllByteSlice(text []byte) (matches []*Match) {
 	return m.findAll(text)
 }
 
-func (m *Matcher) FindAllByteReader(reader *bytes.Reader) (matches []*MatchKey) {
-	return m.findAllReader(reader)
+func (m *Matcher) FindAllByteReader(reader *bytes.Reader, matches Matches) {
+	m.findAllReader(reader, matches)
 }
 
 // FindAllString finds all instances of the patterns in the text.

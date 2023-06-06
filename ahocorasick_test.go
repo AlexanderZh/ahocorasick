@@ -250,19 +250,26 @@ func (m *MatchesKeys) Count() int {
 	return len(m.matches)
 }
 
-func TestRandomGen100kNotFoundReader(t *testing.T) {
-	N := 100000
-	L := 128
-	M := 1000000
 
+func initTestByteSlice(N int, L int) [][]byte{
 	words := make([][]byte, N)
-	buffer := make([]byte, M)
-	rand.Read(buffer)
-
 	for i := 0; i < N; i++ {
 		words[i] = make([]byte, L)
 		rand.Read(words[i])
 	}
+	return words
+}
+
+func TestRandomGen100kNotFoundReader(t *testing.T) {
+	N := 100000
+	L := 128
+	M := 1000000
+	words := initTestByteSlice(N,L)
+	
+	buffer := make([]byte, M)
+	rand.Read(buffer)
+
+	
 
 	m := CompileByteSlices(words)
 	data := bytes.NewReader(buffer)
@@ -368,8 +375,7 @@ func BenchmarkRandomGen100kAllFoundReader(b *testing.B) {
 			buffer2[i*L+j] = w[j]
 		}
 	}
-	var Ms Matches
-	Ms = &MatchesKeys{}
+	Ms := &MatchesKeys{}
 	m.FindAllByteReader(bytes.NewReader(buffer2),Ms)
 	if Ms.Count() != 1 {
 		b.Errorf("Got %d matches instead of 1", Ms.Count())

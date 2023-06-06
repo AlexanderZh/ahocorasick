@@ -2,7 +2,7 @@ package ahocorasick
 
 import (
 	"bytes"
-	"crypto/rand"
+	"math/rand"
 	"reflect"
 	"testing"
 )

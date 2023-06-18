@@ -68,7 +68,7 @@ func TestFindAllByteSlice(t *testing.T) {
 		matcher := compile(test.patterns)
 		for i := 0; i < 1000; i++ { //check memory leak
 			b := matcher.Serialize()
-			e := matcher.Deserialize(b)
+			_, e := Deserialize(b)
 			if e != nil {
 				t.Errorf("error serializer")
 			}

@@ -106,14 +106,14 @@ func (m *DeserializeError) Error() string {
 	return "Finite state machine is corrupted"
 }
 
-func (m *Matcher) Deserialize(data []byte) error {
-
-	var err error
+func Deserialize(data []byte) (m *Matcher, err error) {
+	m = new(Matcher)
 
 	totalLength := len(data)
 
 	if totalLength < 32 || totalLength%8 != 0 {
-		return &DeserializeError{}
+		err = &DeserializeError{}
+		return
 	}
 	//reader := bytes.NewReader(data)
 	reader := bytes.NewReader(data)
@@ -122,25 +122,26 @@ func (m *Matcher) Deserialize(data []byte) error {
 
 	err = binary.Read(reader, binary.LittleEndian, &lenBase)
 	if err != nil {
-		return err
+		return
 	}
 	err = binary.Read(reader, binary.LittleEndian, &lenCheck)
 	if err != nil {
-		return err
+		return
 	}
 	err = binary.Read(reader, binary.LittleEndian, &lenFail)
 	if err != nil {
-		return err
+		return
 	}
 	err = binary.Read(reader, binary.LittleEndian, &lenOutput)
 	if err != nil {
-		return err
+		return
 	}
 
 	lenOutputEach := make([]uint64, lenOutput)
 
 	if totalLength < 8*(4+int(lenOutput)) {
-		return &DeserializeError{}
+		err = &DeserializeError{}
+		return
 	}
 
 	calculatedLength := 8 * (4 + int(lenOutput) + int(lenBase) + int(lenCheck) + int(lenFail))
@@ -148,36 +149,37 @@ func (m *Matcher) Deserialize(data []byte) error {
 	for i := 0; i < int(lenOutput); i++ {
 		err = binary.Read(reader, binary.LittleEndian, &(lenOutputEach[i]))
 		if err != nil {
-			return err
+			return
 		}
 		calculatedLength += 16 * int(lenOutputEach[i])
 	}
 
 	if calculatedLength != totalLength {
-		return &DeserializeError{}
+		err = &DeserializeError{}
+		return
 	}
 
 	err = readToSlice(reader, lenBase, &m.base)
 	if err != nil {
-		return err
+		return
 	}
 	err = readToSlice(reader, lenCheck, &m.check)
 	if err != nil {
-		return err
+		return
 	}
 	err = readToSlice(reader, lenFail, &m.fail)
 	if err != nil {
-		return err
+		return
 	}
 	m.output = make([][]SWord, lenOutput)
 	for i, v := range lenOutputEach {
 		err = readToSliceSWord(reader, v, &m.output[i])
 		if err != nil {
-			return err
+			return
 		}
 	}
 
-	return nil
+	return
 }
 
 func readToSlice(reader *bytes.Reader, len uint64, array *[]int) error {

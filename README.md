@@ -5,7 +5,7 @@ The fastest Golang implementation of the Aho-Corasick algorithm for string-searc
 ## Usage
 
 ```bash
-go get github.com/rrethy/ahocorasick@v1.0.0
+go get github.com/AlexanderZh/ahocorasick@v0.1.8
 ```
 
 [Documentation](https://godoc.org/github.com/RRethy/ahocorasick)

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"sync"
 )
 
 const (
@@ -559,25 +560,40 @@ func (m *Matcher) findAll(text []byte) []*Match {
 
 func (m *Matcher) findAllReader(reader io.Reader, matches Matches) {
 	state := 0
-	buf := make([]byte, 1)
-	n, err := reader.Read(buf)
-	b := int(buf[0])
-	i := 1
-	for err == nil && n == 1 {
-		offset := b
-		for state != 0 && !m.hasEdge(state, offset) {
-			state = m.fail[state]
-		}
 
-		if m.hasEdge(state, offset) {
-			state = m.base[state] + offset
+	var bchan = make(chan []byte, 1024)
+	go func() {
+		pool := sync.Pool{
+			New: func() any {
+				return make([]byte, 512)
+			},
 		}
-		for _, item := range m.output[state] {
-			matches.Append(i, int(item.Key))
+		var err error
+		var n int
+		for err == nil {
+			b := pool.New().([]byte)
+			n, err = reader.Read(b)
+			bchan <- b[:n]
 		}
-		n, err = reader.Read(buf)
-		b = int(buf[0])
-		i++
+		close(bchan)
+	}()
+
+	i := 1
+	for bb := range bchan {
+		for j := 0; j < len(bb); j++ {
+			offset := int(bb[j])
+			for state != 0 && !m.hasEdge(state, offset) {
+				state = m.fail[state]
+			}
+
+			if m.hasEdge(state, offset) {
+				state = m.base[state] + offset
+			}
+			for _, item := range m.output[state] {
+				matches.Append(i, int(item.Key))
+			}
+			i++
+		}
 	}
 }
 
